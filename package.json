@@ -1,0 +1,28 @@
+{
+  "name": "reltime-code",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node backend/index.js",
+    "dev": "nodemon backend/index.js",
+    "build": "npm install && cd frontend && npm install && npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.53.0",
+    "@zegocloud/zego-uikit-prebuilt": "^2.15.1",
+    "axios": "^1.11.0",
+    "dotenv": "^17.2.1",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

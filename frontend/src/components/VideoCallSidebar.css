@@ -1,0 +1,288 @@
+/* VideoCallSidebar Component Styles */
+
+/* Base sidebar styles */
+.video-call-sidebar {
+  transition: width 0.3s ease;
+  box-shadow: -4px 0 20px rgba(0, 255, 0, 0.1);
+}
+
+.video-call-sidebar.resizing {
+  user-select: none;
+  transition: none;
+}
+
+/* Header styles */
+.sidebar-header {
+  backdrop-filter: blur(10px);
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Video Grid Container */
+.video-grid-container {
+  position: relative;
+  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+}
+
+/* Video Grid Layout */
+.video-grid-container .grid {
+  height: 100%;
+  width: 100%;
+  padding: 8px;
+}
+
+/* Video Tile Styles */
+.video-tile {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.video-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid transparent;
+  transition: border-color 0.3s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.video-tile:hover::before {
+  border-color: rgba(0, 255, 0, 0.5);
+}
+
+/* Video element */
+.video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+/* Placeholder avatar */
+.video-tile .placeholder-avatar {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(0, 255, 0, 0.5);
+  }
+}
+
+/* Name label overlay */
+.name-overlay {
+  backdrop-filter: blur(4px);
+  border-radius: 4px;
+}
+
+/* Mic muted indicator */
+.mic-muted {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Resize handle */
+.resize-handle {
+  border-radius: 0 4px 4px 0;
+}
+
+.resize-handle:hover {
+  background-color: rgba(0, 255, 0, 0.3) !important;
+}
+
+/* Control bar */
+.control-bar {
+  backdrop-filter: blur(20px);
+  background: rgba(26, 26, 26, 0.95);
+}
+
+/* Control buttons */
+.control-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.control-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.control-btn:hover::before {
+  opacity: 1;
+}
+
+/* Active/Inactive states */
+.control-btn.active {
+  background-color: rgba(255, 0, 0, 0.2);
+  border-color: #ff0000;
+}
+
+.control-btn:not(.active):hover {
+  transform: scale(1.1);
+}
+
+/* Fullscreen styles */
+.video-call-sidebar:fullscreen {
+  background-color: #0a0a0a;
+}
+
+.video-call-sidebar:fullscreen .sidebar-header {
+  display: none;
+}
+
+/* Scrollbar styling */
+.video-grid-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.video-grid-container::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+.video-grid-container::-webkit-scrollbar-thumb {
+  background: #00ff00;
+  border-radius: 3px;
+}
+
+.video-grid-container::-webkit-scrollbar-thumb:hover {
+  background: #00cc00;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .video-grid-container .grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  
+  .control-bar button {
+    min-width: 44px;
+    padding: 12px;
+  }
+}
+
+/* Animation for joining participants */
+@keyframes participant-join {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.participant-join-animation {
+  animation: participant-join 0.5s ease-out forwards;
+}
+
+/* Animation for leaving participants */
+@keyframes participant-leave {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+.participant-leave-animation {
+  animation: participant-leave 0.3s ease-in forwards;
+}
+
+/* Waiting state */
+.waiting-state {
+  text-align: center;
+}
+
+.waiting-state .waiting-icon {
+  animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Call button styles */
+.start-call-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.start-call-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Participant count badge */
+.participant-count {
+  font-variant-numeric: tabular-nums;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Local user indicator */
+.local-user-badge {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+/* Connection quality indicator (future enhancement) */
+.connection-quality {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.connection-quality .bar {
+  width: 3px;
+  background-color: #00ff00;
+  border-radius: 1px;
+}
+
+.connection-quality .bar:nth-child(1) { height: 4px; }
+.connection-quality .bar:nth-child(2) { height: 6px; }
+.connection-quality .bar:nth-child(3) { height: 8px; }
+.connection-quality .bar:nth-child(4) { height: 10px; }
+
+.connection-quality.poor .bar {
+  background-color: #ff0000;
+}
+
+.connection-quality.fair .bar:nth-child(n+3) {
+  background-color: #ffaa00;
+}
