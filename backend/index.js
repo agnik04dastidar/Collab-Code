@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(cors({
-  origin: "https://real-time-code-editor-7n13.onrender.com",
+  origin: "https://real-time-code-editor-1-29xa.onrender.com",
   methods: ["GET", "POST"],
   credentials: true,
 }));
@@ -22,7 +22,7 @@ app.use(express.json());
 
 const io = new Server(server, {
   cors: {
-    origin: "https://real-time-code-editor-7n13.onrender.com",
+    origin: "https://real-time-code-editor-1-29xa.onrender.com",
     methods: ["GET", "POST"],
     credentials: true,
   },
