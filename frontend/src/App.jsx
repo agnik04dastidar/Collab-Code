@@ -13,7 +13,7 @@ import { v4 as uuid } from "uuid";
 import logo from "./assets/web-logo.png";
 import { motion, AnimatePresence } from "framer-motion";
 
-const socket = io("https://real-time-code-editor-1-29xa.onrender.comhttp://localhost:5000");
+const socket = io("https://real-time-code-editor-1-29xa.onrender.com");
 
 const App = () => {
   const [joined, setJoined] = useState(false);
