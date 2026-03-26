@@ -45,7 +45,7 @@ app.use(cors({
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "https://real-time-code-editor-7n13.onrender.com"],
+    origin: ["https://real-time-code-editor-7n13.onrender.com", "https://collab-code-apeu.onrender.com"],
     methods: ["GET", "POST"],
     credentials: true,
   },
