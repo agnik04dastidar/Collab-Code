@@ -21,7 +21,7 @@ import ResizableIO from "./components/ResizableIO";
 import { supabase } from "./supabase/supabaseClient";
 
 // Get socket URL from environment variable, default to localhost in development
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "https://collab-code-backend-mvi0.onrender.com";
 
 // Initialize socket with connection handling
 const socket = io(SOCKET_URL, {
