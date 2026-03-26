@@ -175,28 +175,29 @@ const VideoCallSidebar = ({
       }}
     >
       {/* Header */}
-      <div 
-        className="sidebar-header flex items-center justify-between px-4 py-3"
-        style={{ 
-          borderBottom: `2px solid ${arcadeGreen}`,
-          backgroundColor: arcadeBgLight
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <FaVideo style={{ color: arcadeGreen }} />
-          <h3 style={{ color: arcadeGreen, fontFamily: '"Press Start 2P", cursive', fontSize: '10px' }}>
-      
-          </h3>
+       <div className="flex items-center gap-2">
+          
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 px-2 py-1 rounded" 
-            style={{ backgroundColor: `${arcadeGreen}20`, border: `1px solid ${arcadeGreen}` }}>
-            
-          </div>
+       <AnimatePresence>
+        {callActive && (
+          <motion.div 
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="flex items-center justify-center gap-3 p-1"
+            style={{ 
+              borderTop: `2px solid ${arcadeGreen}`,
+              backgroundColor: arcadeBgLight
+            }}
+          >
          
-        </div>
-      </div>
 
+            <button onClick={toggleFullscreen} className="p-2 rounded-xl" style={{ border: `2px solid ${arcadeGreen}`, color: arcadeGreen }} title="Toggle Fullscreen">{isFullscreen ? <FaCompress size={14} /> : <FaExpand size={14} />}</button>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
+      
       {/* Video Call Area - Zegocloud renders videos here */}
       <div className="flex-1 overflow-hidden" style={{ backgroundColor: '#0a0a0a' }}>
         {callActive ? (
@@ -220,7 +221,7 @@ const VideoCallSidebar = ({
                 border: `2px solid ${arcadeGreen}`,
               }}
             >
-              <FaPhone size={32} color={arcadeGreen} />
+              <FaVideo size={32} color={arcadeGreen} />
             </div>
             <p 
               className="text-center mb-4"
@@ -230,7 +231,7 @@ const VideoCallSidebar = ({
                 fontSize: '10px'
               }}
             >
-              Start a video call with your team
+              
             </p>
             <motion.button 
               onClick={handleStartCall}
@@ -246,46 +247,30 @@ const VideoCallSidebar = ({
               }}
             >
               <FaVideo size={14} />
-              START CALL
+              ENTER CALL
             </motion.button>
           </div>
         )}
       </div>
 
       {/* Control Bar */}
-      <AnimatePresence>
-        {callActive && (
-          <motion.div 
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 50, opacity: 0 }}
-            className="flex items-center justify-center gap-3 p-3"
-            style={{ 
-              borderTop: `2px solid ${arcadeGreen}`,
-              backgroundColor: arcadeBgLight
-            }}
-          >
+     <div 
+        className="sidebar-header flex items-center justify-between px-1 py-1"
+        style={{ 
+          borderBottom: `2px solid ${arcadeGreen}`,
+          backgroundColor: arcadeBgLight
+        }}
+      >
+        <div className="flex items-center gap-2">
+          
+        </div>
+        <div className="flex items-center gap-2">
+          <div>
+            Powered by Zegocloud
+          </div>
          
-
-            <motion.button 
-              onClick={toggleFullscreen}
-              className="p-4 rounded-2xl transition-all"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              style={{ 
-                backgroundColor: 'rgba(0, 255, 0, 0.15)', 
-                border: `3px solid ${arcadeGreen}`,
-                color: arcadeGreen,
-                boxShadow: `0 0 20px ${arcadeGreen}30`,
-                minWidth: '56px'
-              }}
-              title={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
-            >
-              {isFullscreen ? <FaCompress size={18} /> : <FaExpand size={18} />}
-            </motion.button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      </div>
 
       {/* Resize Handle */}
       {!isFullscreen && (
@@ -312,7 +297,7 @@ const VideoCallSidebar = ({
             animate={{ opacity: isResizing ? 1 : 0.5 }}
           >
             <FaArrowsAltH 
-              size={14} 
+              size={1} 
               style={{ 
                 color: isResizing ? arcadeBg : arcadeGreen
               }} 

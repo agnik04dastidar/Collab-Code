@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { drawLine } from "../utils/drawingUtils";
 import {
   drawRect,
@@ -8,21 +8,62 @@ import {
   drawDiamond,
   drawPentagon,
 } from "../utils/shapeUtils";
-import TextBox from "../utils/textUtils";
+import TextBox, { generateId } from "../utils/textUtils";
 import { motion, AnimatePresence } from "framer-motion";
+import throttle from 'lodash.throttle';
 import { Rnd } from "react-rnd";
 import io from "socket.io-client";
 import penCursor from "../assets/pen-cursor.png";
 import eraserCursor from "../assets/eraser-cursor.png";
 
-const socket = io("http://localhost:5000");
+// Use environment variable for socket URL, default to localhost in development
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const socket = io(SOCKET_URL);
 
-const Whiteboard = ({ visible, roomId }) => {
+// Generate consistent unique ID
+const generateUniqueId = () => {
+  return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+const showUserDrawingLabel = (userName, x, y) => {
+  const canvas = canvasRef.current;
+  const ctx = ctxRef.current;
+  if (!ctx || !canvas) return;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 1;
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+
+  const text = `${userName} drawing...`;
+  const textMetrics = ctx.measureText(text);
+  const labelWidth = textMetrics.width + 10;
+  const labelHeight = 20;
+
+  ctx.fillRect(x, y - labelHeight - 5, labelWidth, labelHeight);
+  ctx.strokeRect(x, y - labelHeight - 5, labelWidth, labelHeight);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, x + 5, y - 5);
+
+  ctx.restore();
+
+  // Fade after 2 seconds
+  setTimeout(() => redrawCanvas(), 2000);
+};
+
+const Whiteboard = ({ visible, roomId, userName }) => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [tool, setTool] = useState("pen");
   const [shape, setShape] = useState("");
+  
+  // Refs to track sync state
+  const isProcessingRemoteDraw = useRef(false);
+  const lastDrawnId = useRef(null);
 
   useEffect(() => {
     socket.on("shapeOptionChange", (newShape) => {
@@ -35,9 +76,9 @@ const Whiteboard = ({ visible, roomId }) => {
 
   useEffect(() => {
     if (shape) {
-      socket.emit("shapeOptionChange", shape);
+      socket.emit("shapeOptionChange", { roomId, shape });
     }
-  }, [shape]);
+  }, [shape, roomId]);
 
   const [color, setColor] = useState("#000000");
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
@@ -45,14 +86,15 @@ const Whiteboard = ({ visible, roomId }) => {
   const [undoStack, setUndoStack] = useState([]);
   const [textInputs, setTextInputs] = useState([]);
   const [fixed, setFixed] = useState(false);
-  // Get initial dimensions based on viewport size
+  
+  // Get initial dimensions - larger for scrolling
   const getInitialDimensions = () => {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Calculate dimensions that fit well in the viewport
-    const width = Math.min(viewportWidth * 0.6, 1200);
-    const height = Math.min(viewportHeight * 0.6, 700);
+    // Larger dimensions to allow scrolling
+    const width = Math.min(viewportWidth * 0.8, 1600);
+    const height = Math.min(viewportHeight * 0.7, 900);
     
     return { 
       width, 
@@ -62,7 +104,7 @@ const Whiteboard = ({ visible, roomId }) => {
     };
   };
   
-  const [dimensions, setDimensions] = useState(getInitialDimensions);
+  const [dimensions, setDimensions] = useState(getInitialDimensions());
   const [shapes, setShapes] = useState([]);
   const [penDrawings, setPenDrawings] = useState([]);
   const [selectedShape, setSelectedShape] = useState(null);
@@ -88,43 +130,167 @@ const Whiteboard = ({ visible, roomId }) => {
       ctx.putImageData(lastImage.current, 0, 0);
     }
 
-    socket.emit("whiteboardJoin", roomId);
+    socket.emit("getWhiteboardState", { roomId });
 
+    // Listen for full whiteboard state sync
     socket.on("whiteboardStateSync", (whiteboardData) => {
+      isProcessingRemoteDraw.current = true;
       if (whiteboardData.shapes) {
         setShapes(whiteboardData.shapes);
       }
       if (whiteboardData.drawings) {
         setPenDrawings(whiteboardData.drawings);
       }
-      redrawCanvas();
+      if (whiteboardData.textBoxes) {
+        setTextInputs(whiteboardData.textBoxes);
+      }
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+        redrawCanvas();
+      }, 0);
     });
 
+    // Listen for toggled whiteboard with all data
+    socket.on("toggledWhiteboard", (data) => {
+      isProcessingRemoteDraw.current = true;
+      if (data.shapes) setShapes(data.shapes || []);
+      if (data.drawings) setPenDrawings(data.drawings || []);
+      if (data.textBoxes) setTextInputs(data.textBoxes || []);
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+        redrawCanvas();
+      }, 0);
+    });
+
+    // Listen for new pen drawings from other users
     socket.on("draw", (drawing) => {
+      // Skip if we already processed this (from our own emit)
+      if (lastDrawnId.current === drawing.id) {
+        lastDrawnId.current = null;
+        return;
+      }
+      
+      // Show user label indicator
+      if (drawing.userName && drawing.userName !== 'Unknown') {
+        showUserDrawingLabel(drawing.userName, drawing.x1, drawing.y1);
+      }
+      
+      isProcessingRemoteDraw.current = true;
       setPenDrawings(prev => [...prev, drawing]);
       drawLine(ctxRef.current, drawing.x0, drawing.y0, drawing.x1, drawing.y1, drawing.color, drawing.tool, drawing.width);
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+      }, 0);
     });
 
+    // Listen for new shapes from other users
     socket.on("shapeDraw", (shapeData) => {
+      // Skip if we already have this shape
+      if (shapes.find(s => s.id === shapeData.id)) {
+        return;
+      }
+      
+      isProcessingRemoteDraw.current = true;
       setShapes(prevShapes => [...prevShapes, shapeData]);
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+        redrawCanvas();
+      }, 0);
     });
 
-    socket.on("clearCanvas", () => {
+    // Listen for shape updates (resize/move)
+    socket.on("shapeUpdated", ({ shapeId, updates }) => {
+      isProcessingRemoteDraw.current = true;
+      setShapes(prevShapes => 
+        prevShapes.map(s => s.id === shapeId ? { ...s, ...updates } : s)
+      );
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+        redrawCanvas();
+      }, 0);
+    });
+
+    // Listen for shape deletions
+    socket.on("shapeDeleted", ({ shapeId }) => {
+      isProcessingRemoteDraw.current = true;
+      setShapes(prevShapes => prevShapes.filter(s => s.id !== shapeId));
+      if (selectedShape && selectedShape.id === shapeId) {
+        setSelectedShape(null);
+      }
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+        redrawCanvas();
+      }, 0);
+    });
+
+    // Listen for text box additions
+    socket.on("textBoxAdded", (textBox) => {
+      // Skip if we already have this text box
+      if (textInputs.find(t => t.id === textBox.id)) {
+        return;
+      }
+      setTextInputs(prev => [...prev, textBox]);
+    });
+
+    // Listen for text box updates
+    socket.on("textBoxUpdated", ({ textBoxId, updates }) => {
+      setTextInputs(prev => 
+        prev.map(t => t.id === textBoxId ? { ...t, ...updates } : t)
+      );
+    });
+
+    // Listen for text box deletions
+    socket.on("textBoxDeleted", ({ textBoxId }) => {
+      setTextInputs(prev => prev.filter(t => t.id !== textBoxId));
+    });
+
+    // Listen for canvas clear
+    socket.on("canvasCleared", () => {
+      isProcessingRemoteDraw.current = true;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       lastImage.current = null;
       setUndoStack([]);
       setShapes([]);
       setPenDrawings([]);
+      setTextInputs([]);
       setSelectedShape(null);
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+      }, 0);
+    });
+
+    // Listen for undo from other users
+    socket.on("whiteboardUndone", ({ removed }) => {
+      isProcessingRemoteDraw.current = true;
+      if (removed) {
+        if (removed.type) {
+          // It was a shape
+          setShapes(prev => prev.slice(0, -1));
+        } else {
+          // It was a drawing
+          setPenDrawings(prev => prev.slice(0, -1));
+        }
+      }
+      setTimeout(() => {
+        isProcessingRemoteDraw.current = false;
+        redrawCanvas();
+      }, 0);
     });
 
     return () => {
       socket.off("whiteboardStateSync");
+      socket.off("toggledWhiteboard");
       socket.off("draw");
       socket.off("shapeDraw");
-      socket.off("clearCanvas");
+      socket.off("shapeUpdated");
+      socket.off("shapeDeleted");
+      socket.off("textBoxAdded");
+      socket.off("textBoxUpdated");
+      socket.off("textBoxDeleted");
+      socket.off("canvasCleared");
+      socket.off("whiteboardUndone");
     };
-  }, [visible, dimensions, tool, color, roomId]);
+  }, [visible, dimensions, tool, color, roomId, selectedShape]);
 
   useEffect(() => {
     if (visible) {
@@ -308,20 +474,40 @@ const Whiteboard = ({ visible, roomId }) => {
       
       setShapes(updatedShapes);
       setSelectedShape(updatedShapes.find(s => s.id === selectedShape.id));
+      socket.emit("shapeUpdate", { roomId, shapeId: selectedShape.id, updates: updatedShapes.find(s => s.id === selectedShape.id) });
       redrawCanvas();
     } else if ((tool === "pen" || tool === "eraser") && !shape) {
-      drawLine(ctxRef.current, startPoint.x, startPoint.y, offsetX, offsetY, color, tool);
-      socket.emit("draw", { roomId, x0: startPoint.x, y0: startPoint.y, x1: offsetX, y1: offsetY, color, tool });
+      const effectiveColor = tool === "eraser" ? "#ffffff" : color;
+      const effectiveTool = tool === "eraser" ? "pen" : tool;
+      
+      drawLine(ctxRef.current, startPoint.x, startPoint.y, offsetX, offsetY, effectiveColor, "pen", tool === "eraser" ? 20 : 2);
       
       const lineWidth = tool === "eraser" ? 20 : 2;
-      setPenDrawings(prev => [...prev, {
-        id: Date.now() + Math.random(),
+      const drawingId = generateUniqueId();
+      lastDrawnId.current = drawingId;
+      
+      const throttledEmit = throttle(() => socket.emit("draw", { 
+        roomId,
+        id: drawingId,
         x0: startPoint.x,
         y0: startPoint.y,
         x1: offsetX,
         y1: offsetY,
-        color: color,
-        tool: tool,
+        color: effectiveColor,
+        tool: effectiveTool,
+        width: lineWidth,
+        userName: userName || 'Unknown'
+      }), 30);
+      throttledEmit();
+      
+      setPenDrawings(prev => [...prev, {
+        id: drawingId,
+        x0: startPoint.x,
+        y0: startPoint.y,
+        x1: offsetX,
+        y1: offsetY,
+        color: effectiveColor,
+        tool: effectiveTool,
         width: lineWidth
       }]);
       
@@ -342,8 +528,9 @@ const Whiteboard = ({ visible, roomId }) => {
     }
 
     if (shape) {
+      const newShapeId = generateUniqueId();
       const newShape = {
-        id: Date.now(),
+        id: newShapeId,
         type: shape,
         x0: startPoint.x,
         y0: startPoint.y,
@@ -353,7 +540,7 @@ const Whiteboard = ({ visible, roomId }) => {
       };
       setShapes(prev => [...prev, newShape]);
       setShape("");
-      socket.emit("shapeDraw", { roomId, ...newShape });
+      socket.emit("shapeDraw", { roomId, ...newShape, userName: userName || 'Unknown' });
     }
 
     const snapshot = ctxRef.current.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -364,34 +551,82 @@ const Whiteboard = ({ visible, roomId }) => {
   };
 
   const clearCanvas = () => {
-    ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    socket.emit("clearCanvas", { roomId });
+    if (ctxRef.current && canvasRef.current) {
+      ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
     lastImage.current = null;
     setUndoStack([]);
     setShapes([]);
     setPenDrawings([]);
+    setTextInputs([]);
     setSelectedShape(null);
+    
+    socket.emit("clearCanvas", { roomId });
   };
 
   const undo = () => {
+    let removedItem = null;
+    
+    if (shapes.length > 0) {
+      const newShapes = [...shapes];
+      removedItem = newShapes.pop();
+      setShapes(newShapes);
+    } else if (penDrawings.length > 0) {
+      const newDrawings = [...penDrawings];
+      removedItem = newDrawings.pop();
+      setPenDrawings(newDrawings);
+    }
+    
     const backups = [...undoStack];
     const last = backups.pop();
-    if (last) ctxRef.current.putImageData(last, 0, 0);
+    if (last && ctxRef.current && canvasRef.current) {
+      ctxRef.current.putImageData(last, 0, 0);
+    }
     setUndoStack(backups);
     lastImage.current = last || null;
     
-    if (shapes.length > 0) {
-      setShapes(prev => prev.slice(0, -1));
-    }
+    socket.emit("undoWhiteboard", { roomId, removed: removedItem });
+    
+    redrawCanvas();
   };
 
   const addTextBox = () => {
-    setTextInputs(prev => [...prev, { id: Date.now(), x: 50, y: 50, width: 200, height: 100, text: "" }]);
+    const newTextBoxId = generateId ? generateId() : generateUniqueId();
+    const newTextBox = { 
+      id: newTextBoxId, 
+      x: 50, 
+      y: 50, 
+      width: 200, 
+      height: 100, 
+      text: "" 
+    };
+    setTextInputs(prev => [...prev, newTextBox]);
+    socket.emit("textBoxAdd", { roomId, textBox: newTextBox });
   };
 
-  const removeTextBox = id => setTextInputs(prev => prev.filter(t => t.id !== id));
-  const updateText = (id, text) => setTextInputs(prev => prev.map(t => t.id === id ? { ...t, text } : t));
-  const updateTextPosition = (id, pos) => setTextInputs(prev => prev.map(t => t.id === id ? { ...t, ...pos } : t));
+  const removeTextBox = (id) => {
+    setTextInputs(prev => prev.filter(t => t.id !== id));
+    socket.emit("textBoxDelete", { roomId, textBoxId: id });
+  };
+  
+  const updateText = (id, text) => {
+    setTextInputs(prev => prev.map(t => t.id === id ? { ...t, text } : t));
+    socket.emit("textBoxUpdate", { roomId, textBoxId: id, updates: { text } });
+  };
+  
+  const updateTextPosition = (id, pos) => {
+    setTextInputs(prev => prev.map(t => t.id === id ? { ...t, ...pos } : t));
+    socket.emit("textBoxUpdate", { roomId, textBoxId: id, updates: pos });
+  };
+
+  const deleteSelectedShape = () => {
+    if (selectedShape) {
+      socket.emit("shapeDelete", { roomId, shapeId: selectedShape.id });
+      setShapes(prev => prev.filter(s => s.id !== selectedShape.id));
+      setSelectedShape(null);
+      redrawCanvas();
+    }
+  };
 
   const getCursorStyle = () => {
     if (tool === "pen") return `url(${penCursor}) 0 32, auto`;
@@ -420,9 +655,9 @@ const Whiteboard = ({ visible, roomId }) => {
             bounds="window"
             className="bg-white rounded-xl shadow-2xl overflow-hidden border border-slate-700"
           >
-            <div className="w-full h-full">
+            <div className="w-full h-full flex flex-col">
               {/* Toolbar */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border-b border-slate-700">
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
                 <button 
                   onClick={() => setFixed(prev => !prev)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${fixed ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
@@ -447,6 +682,14 @@ const Whiteboard = ({ visible, roomId }) => {
                 >
                   Text
                 </button>
+                {selectedShape && (
+                  <button 
+                    onClick={deleteSelectedShape}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
                 
                 <div className="h-6 w-px bg-slate-600 mx-2"></div>
                 
@@ -489,25 +732,33 @@ const Whiteboard = ({ visible, roomId }) => {
                 />
               </div>
 
-              <canvas 
-                ref={canvasRef} 
-                style={{ cursor: getCursorStyle(), width: "100%", height: "calc(100% - 48px)" }} 
-                onMouseDown={handleStart} 
-                onMouseMove={handleMouseMove} 
-                onMouseUp={handleEnd} 
-                onMouseLeave={handleEnd} 
-              />
-
-              {textInputs.map(t => (
-                <TextBox 
-                  key={t.id} 
-                  {...t} 
-                  color={color} 
-                  updateText={updateText} 
-                  updatePosition={updateTextPosition} 
-                  removeTextBox={() => removeTextBox(t.id)} 
+              {/* Scrollable Canvas Container */}
+              <div className="flex-1 overflow-auto" style={{ position: 'relative' }}>
+                <canvas 
+                  ref={canvasRef} 
+                  style={{ 
+                    cursor: getCursorStyle(), 
+                    display: 'block',
+                    minWidth: '100%',
+                    minHeight: '100%'
+                  }} 
+                  onMouseDown={handleStart} 
+                  onMouseMove={handleMouseMove} 
+                  onMouseUp={handleEnd} 
+                  onMouseLeave={handleEnd} 
                 />
-              ))}
+
+                {textInputs.map(t => (
+                  <TextBox 
+                    key={t.id} 
+                    {...t} 
+                    color={color} 
+                    updateText={(text) => updateText(t.id, text)} 
+                    updatePosition={(pos) => updateTextPosition(t.id, pos)} 
+                    removeTextBox={() => removeTextBox(t.id)} 
+                  />
+                ))}
+              </div>
             </div>
           </Rnd>
         </motion.div>
